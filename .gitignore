@@ -1,0 +1,9 @@
+.venv/
+.idea/
+**/__pycache__/
+
+.pdm-python
+
+data/
+
+!src/data/
