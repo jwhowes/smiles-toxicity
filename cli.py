@@ -24,7 +24,10 @@ def masked_pretrain(ctx: click.Context):
     train_config = TrainerConfig.from_yaml(os.path.join(ctx.obj["config_path"], "train.yaml"))
 
     MaskedTrainer.train(
-        model_config, data_config, train_config
+        exp_name=os.path.splitext(os.path.basename(ctx.obj["config_path"]))[0],
+        model_config=model_config,
+        data_config=data_config,
+        train_config=train_config
     )
 
 
