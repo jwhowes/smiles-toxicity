@@ -1,13 +1,13 @@
-from typing import Mapping, TypedDict, List
+from typing import Mapping, TypedDict, List, Optional
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
-from torch import LongTensor, FloatTensor
+from torch import Tensor
 
 
 class TokenizerOutput(TypedDict):
-    token_ids: LongTensor
-    attention_mask: FloatTensor
+    token_ids: Tensor
+    attention_mask: Tensor
 
 
 alphabet = [
@@ -29,17 +29,21 @@ class SMILESTokenizer:
 
     vocab_size: int = 2 + len(alphabet)
 
-    def __call__(self, seqs: List[str]) -> TokenizerOutput:
-        token_ids = [
-            torch.tensor(
-                [self.bos_token] + [self.vocab[c] for c in seq], dtype=torch.long
-            )
-            for seq in seqs
-        ]
-
+    def pad(self, token_ids: List[Tensor]) -> TokenizerOutput:
         return {
             "token_ids": pad_sequence(token_ids, batch_first=True, padding_value=self.pad_token),
             "attention_mask": pad_sequence([
                 torch.zeros(t.shape[0]) for t in token_ids
             ], batch_first=True, padding_value=float('-inf'))
         }
+
+    def __call__(self, seqs: List[str] | str) -> TokenizerOutput:
+        if isinstance(seqs, str):
+            seqs = [seqs]
+
+        return self.pad([
+            torch.tensor(
+                [self.bos_token] + [self.vocab[c] for c in seq], dtype=torch.long
+            )
+            for seq in seqs
+        ])
