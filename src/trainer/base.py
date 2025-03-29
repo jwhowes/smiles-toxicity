@@ -40,15 +40,15 @@ class BaseTrainer(ABC):
         prev_save = 0
 
         def save():
-            global ckpt, total_loss, prev_save
+            nonlocal ckpt, total_loss, prev_save
             avg_loss = total_loss / (i - prev_save)
 
             with open(log_path, "a") as f:
                 f.write(f"{ckpt},{avg_loss:.4f},{datetime.now()}\n")
 
             torch.save(
-                os.path.join(ckpt_dir, f"checkpoint_{ckpt:05}.pt"),
-                accelerator.get_state_dict(model)
+                accelerator.get_state_dict(model),
+                os.path.join(ckpt_dir, f"checkpoint_{ckpt:04}.pt")
             )
 
             prev_save = i
@@ -57,7 +57,7 @@ class BaseTrainer(ABC):
 
         exp_dir = os.path.join("experiments", exp_name)
         ckpt_dir = os.path.join(exp_dir, "ckpts")
-        log_path = os.path.join(exp_dir, "log.cv")
+        log_path = os.path.join(exp_dir, "log.csv")
 
         if accelerator.is_main_process:
             if not os.path.isdir(exp_dir):
