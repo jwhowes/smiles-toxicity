@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Optional, Self
+import os
+from typing import Optional
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import yaml
 from torch import nn, Tensor
 
 from ..tokenizer import SMILESTokenizer
@@ -11,6 +13,12 @@ from ..config import Config
 
 from .util import RMSNorm
 from .transformer import SMILESTransformer
+
+
+@dataclass
+class PretrainedCheckpoint:
+    experiment: str
+    ckpt_num: int
 
 
 @dataclass
@@ -22,14 +30,51 @@ class ModelConfig(Config):
     attn_dropout: float = 0.0
     ffn_dropout: float = 0.0
 
+    pretrained: Optional[PretrainedCheckpoint] = None
+
+    def __init__(
+            self, pretrained: Optional[dict] = None,
+            **kwargs
+    ):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+        if pretrained is not None:
+            self.pretrained = PretrainedCheckpoint(**pretrained)
+
+    @classmethod
+    def from_yaml(cls, yaml_path: str) -> ModelConfig:
+        assert os.path.exists(yaml_path), "yaml path not found."
+
+        yaml.add_multi_constructor('!', cls.unknown)
+        yaml.add_multi_constructor('tag:', cls.unknown)
+
+        with open(yaml_path, "r") as f:
+            config = yaml.load(f, Loader=yaml.FullLoader)
+
+        if config is None:
+            return cls()
+
+        if "pretrained" in config and config["pretrained"] is not None:
+            pretrained_config = ModelConfig.from_yaml(os.path.join(
+                "experiments", config["pretrained"]["experiment"], "model.yaml"
+            ))
+            pretrained_config.pretrained = config["pretrained"]
+
+            return cls(**pretrained_config.__dict__)
+
+        return cls(
+            **{
+                k: float(v) if cls.__dataclass_fields__[k].type == "float" else v for k, v in config.items()
+            }
+        )
+
 
 class BaseModel(nn.Module, ABC):
-    @classmethod
-    def from_config(cls, config: ModelConfig) -> Self:
-        return cls(
-            max_length=SMILESTokenizer.max_length,
-            **config.__dict__
-        )
+    @staticmethod
+    @abstractmethod
+    def from_config(config: ModelConfig, load_pretrained: bool = True) -> BaseModel:
+        ...
 
     @abstractmethod
     def forward(self, token_ids: Tensor, attention_mask: Optional[Tensor] = None) -> Tensor:
@@ -54,3 +99,10 @@ class MaskedTransformer(SMILESTransformer, BaseModel):
         x = super(MaskedTransformer, self).forward(token_ids, attention_mask)
 
         return self.head(x)
+
+    @staticmethod
+    def from_config(config: ModelConfig, load_pretrained: bool = True) -> MaskedTransformer:
+        return MaskedTransformer(
+            max_length=SMILESTokenizer.max_length,
+            **config.__dict__
+        )
