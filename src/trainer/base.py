@@ -24,6 +24,8 @@ class TrainerConfig(Config):
     lr: float = 5e-5
     weight_decay: float = 0.05
 
+    num_epochs: int = 5
+
     log_interval: int = 100
     save_interval: int = 1000
 
@@ -35,15 +37,11 @@ class BaseTrainer(ABC):
 
     @classmethod
     def train(cls, exp_name: str, model_config: ModelConfig, data_config: DatasetConfig, train_config: TrainerConfig):
-        ckpt = 1
-        total_loss = 0
-        prev_save = 0
-
         def save():
             nonlocal ckpt, total_loss, prev_save
             avg_loss = total_loss / (i - prev_save)
 
-            with open(log_path, "a") as f:
+            with open(train_log_path, "a") as f:
                 f.write(f"{ckpt},{avg_loss:.4f},{datetime.now()}\n")
 
             torch.save(
@@ -57,7 +55,9 @@ class BaseTrainer(ABC):
 
         exp_dir = os.path.join("experiments", exp_name)
         ckpt_dir = os.path.join(exp_dir, "ckpts")
-        log_path = os.path.join(exp_dir, "log.csv")
+
+        train_log_path = os.path.join(exp_dir, "log-train.csv")
+        eval_log_path = os.path.join(exp_dir, "log-eval.csv")
 
         if accelerator.is_main_process:
             if not os.path.isdir(exp_dir):
@@ -66,8 +66,11 @@ class BaseTrainer(ABC):
             if not os.path.isdir(ckpt_dir):
                 os.makedirs(ckpt_dir)
 
-            with open(log_path, "w+") as f:
+            with open(train_log_path, "w+") as f:
                 f.write("ckpt,avg loss,timestamp\n")
+
+            with open(eval_log_path, "w+") as f:
+                f.write("epoch,avg loss,timestamp\n")
 
             with open(os.path.join(exp_dir, "model.yaml"), "w+") as f:
                 yaml.dump(model_config, f)
@@ -80,13 +83,20 @@ class BaseTrainer(ABC):
 
         model = cls.model_cls.from_config(model_config)
 
-        dataset = cls.dataset_cls.from_config(data_config)
-        dataloader = DataLoader(
-            dataset,
+        train_dataset, eval_dataset = cls.dataset_cls.from_config(data_config)
+        train_dataloader = DataLoader(
+            train_dataset,
             batch_size=data_config.batch_size,
             shuffle=True,
             pin_memory=True,
-            collate_fn=dataset.collate
+            collate_fn=train_dataset.collate
+        )
+        eval_dataloader = DataLoader(
+            eval_dataset,
+            batch_size=data_config.batch_size,
+            shuffle=False,
+            pin_memory=True,
+            collate_fn=train_dataset.collate
         )
 
         criterion = cls.criterion_cls()
@@ -97,34 +107,60 @@ class BaseTrainer(ABC):
         lr_scheduler = get_cosine_schedule_with_warmup(
             opt,
             num_warmup_steps=0,
-            num_training_steps=len(dataloader)
+            num_training_steps=train_config.num_epochs * len(train_dataloader)
         )
 
-        model, dataloader, criterion, opt, lr_scheduler = accelerator.prepare(
-            model, dataloader, criterion, opt, lr_scheduler
+        model, train_dataloader, eval_dataloader, criterion, opt, lr_scheduler = accelerator.prepare(
+            model, train_dataloader, eval_dataloader, criterion, opt, lr_scheduler
         )
 
-        total_loss = 0
-        prev_save = 0
-        for i, (input, target) in enumerate(dataloader):
-            opt.zero_grad()
+        ckpt = 0
+        for epoch in range(train_config.num_epochs):
+            if accelerator.is_main_process:
+                print(f"EPOCH {epoch + 1} / {train_config.num_epochs}")
+                print("Training...")
 
-            pred = model(**input)
+            model.train()
 
-            loss = criterion(pred, **target)
+            total_loss = 0
+            prev_save = 0
+            for i, (input, target) in enumerate(train_dataloader):
+                opt.zero_grad()
 
-            accelerator.backward(loss)
+                pred = model(**input)
 
-            opt.step()
-            lr_scheduler.step()
+                loss = criterion(pred, **target)
 
-            total_loss += loss.item()
+                accelerator.backward(loss)
 
-            if accelerator.is_main_process and i % train_config.log_interval == 0:
-                print(f"{i} / {len(dataloader)} iters.\t Loss: {loss.item():.4f}")
+                opt.step()
+                lr_scheduler.step()
 
-            if accelerator.is_main_process and i > 0 and i % train_config.save_interval == 0:
+                total_loss += loss.item()
+
+                if accelerator.is_main_process and i % train_config.log_interval == 0:
+                    print(f"\t{i} / {len(train_dataloader)} iters.\t Loss: {loss.item():.4f}")
+
+                if accelerator.is_main_process and i > 0 and i % train_config.save_interval == 0:
+                    save()
+
+            if accelerator.is_main_process:
                 save()
 
-        if accelerator.is_main_process:
-            save()
+            if accelerator.is_main_process:
+                print("Evaluating...")
+
+            model.eval()
+            total_loss = 0
+            for i, (input, target) in enumerate(eval_dataloader):
+                with torch.no_grad():
+                    pred = model(**input)
+                    loss = criterion(pred, **target)
+
+                total_loss += loss.item()
+
+                if accelerator.is_main_process and i % train_config.log_interval == 0:
+                    print(f"\t{i} / {len(eval_dataloader)} iters.\t Loss: {loss.item():.4f}")
+
+            with open(eval_log_path, "a") as f:
+                f.write(f"{epoch + 1},{total_loss / len(eval_dataloader):.4f},{datetime.now()}")

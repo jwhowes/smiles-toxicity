@@ -15,21 +15,20 @@ from ..tokenizer import SMILESTokenizer
 from .base import BaseDataset, DatasetConfig
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MaskedPretrainDatasetConfig(DatasetConfig):
+    data_path: str
+
+    train_frac: float = 0.8
     mask_p: float = 0.15
 
 
 class MaskedPretrainDataset(BaseDataset):
-    def __init__(self, data_path: str, mask_p: float = 0.15):
-        assert os.path.exists(data_path), "Data path not found."
-
+    def __init__(self, seqs: List[str], mask_p: float = 0.15):
         self.tokenizer = SMILESTokenizer()
 
         self.mask_p = mask_p
-
-        with open(data_path, "r") as f:
-            self.seqs = f.read().splitlines()
+        self.seqs = seqs
 
     def __len__(self) -> int:
         return len(self.seqs)
@@ -60,8 +59,21 @@ class MaskedPretrainDataset(BaseDataset):
         )
 
     @classmethod
-    def from_config(cls, config: MaskedPretrainDatasetConfig) -> MaskedPretrainDataset:
-        return MaskedPretrainDataset(
-            data_path=config.data_path,
-            mask_p=config.mask_p
+    def from_config(cls, config: MaskedPretrainDatasetConfig) -> Tuple[MaskedPretrainDataset, MaskedPretrainDataset]:
+        assert os.path.exists(config.data_path), "Data path not found."
+
+        with open(config.data_path) as f:
+            seqs = f.read().splitlines()
+
+        split_idx = ceil(len(seqs) * config.train_frac)
+
+        return (
+            MaskedPretrainDataset(
+                seqs=seqs[:split_idx],
+                mask_p=config.mask_p
+            ),
+            MaskedPretrainDataset(
+                seqs=seqs[split_idx:],
+                mask_p=config.mask_p
+            )
         )

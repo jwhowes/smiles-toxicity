@@ -14,8 +14,6 @@ T = TypeVar("T")
 
 @dataclass
 class DatasetConfig(Config):
-    data_path: str
-
     batch_size: int = 32
 
 
@@ -34,5 +32,5 @@ class BaseDataset(Dataset, ABC):
 
     @classmethod
     @abstractmethod
-    def from_config(cls, config: DatasetConfig) -> BaseDataset:
+    def from_config(cls, config: DatasetConfig) -> Tuple[BaseDataset, BaseDataset]:
         ...

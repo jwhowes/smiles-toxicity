@@ -3,8 +3,9 @@ import os
 import click
 
 from src.model import ModelConfig
-from src.data import MaskedPretrainDatasetConfig
+from src.data import MaskedPretrainDatasetConfig, ToxicityDatasetConfig
 from src.trainer import TrainerConfig, MaskedTrainer
+from src.trainer.toxicity import ToxicityTrainer
 
 
 @click.group()
@@ -24,6 +25,21 @@ def masked_pretrain(ctx: click.Context):
     train_config = TrainerConfig.from_yaml(os.path.join(ctx.obj["config_path"], "train.yaml"))
 
     MaskedTrainer.train(
+        exp_name=os.path.splitext(os.path.basename(ctx.obj["config_path"]))[0],
+        model_config=model_config,
+        data_config=data_config,
+        train_config=train_config
+    )
+
+
+@cli.command()
+@click.pass_context
+def toxicity(ctx: click.Context):
+    model_config = ModelConfig.from_yaml(os.path.join(ctx.obj["config_path"], "model.yaml"))
+    data_config = ToxicityDatasetConfig.from_yaml(os.path.join(ctx.obj["config_path"], "data.yaml"))
+    train_config = TrainerConfig.from_yaml(os.path.join(ctx.obj["config_path"], "train.yaml"))
+
+    ToxicityTrainer.train(
         exp_name=os.path.splitext(os.path.basename(ctx.obj["config_path"]))[0],
         model_config=model_config,
         data_config=data_config,

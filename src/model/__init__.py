@@ -5,6 +5,7 @@ from typing import Optional
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
+import torch
 import yaml
 from torch import nn, Tensor
 
@@ -71,10 +72,33 @@ class ModelConfig(Config):
 
 
 class BaseModel(nn.Module, ABC):
-    @staticmethod
-    @abstractmethod
-    def from_config(config: ModelConfig, load_pretrained: bool = True) -> BaseModel:
-        ...
+    @classmethod
+    def from_config(cls, config: ModelConfig, load_pretrained: bool = True) -> MaskedTransformer:
+        model = cls(
+            max_length=SMILESTokenizer.max_length,
+            d_model=config.d_model,
+            n_heads=config.n_heads,
+            n_layers=config.n_layers,
+            attn_dropout=config.attn_dropout,
+            ffn_dropout=config.ffn_dropout
+        )
+
+        if load_pretrained:
+            model.load_state_dict(
+                torch.load(
+                    os.path.join(
+                        "experiments",
+                        config.pretrained.experiment,
+                        "ckpts",
+                        f"checkpoint_{config.pretrained.ckpt_num:04}.pt"
+                    ),
+                    weights_only=True,
+                    map_location="cpu"
+                ),
+                strict=False
+            )
+
+        return model
 
     @abstractmethod
     def forward(self, token_ids: Tensor, attention_mask: Optional[Tensor] = None) -> Tensor:
@@ -100,9 +124,22 @@ class MaskedTransformer(SMILESTransformer, BaseModel):
 
         return self.head(x)
 
-    @staticmethod
-    def from_config(config: ModelConfig, load_pretrained: bool = True) -> MaskedTransformer:
-        return MaskedTransformer(
-            max_length=SMILESTokenizer.max_length,
-            **config.__dict__
+
+class ToxicityTransformer(SMILESTransformer, BaseModel):
+    def __init__(
+            self, d_model: int, n_heads: int, n_layers: int, max_length: int,
+            attn_dropout: float = 0.0, ffn_dropout: float = 0.0
+    ):
+        super(ToxicityTransformer, self).__init__(
+            d_model, n_heads, n_layers, max_length, attn_dropout, ffn_dropout
         )
+
+        self.classifier = nn.Sequential(
+            RMSNorm(d_model),
+            nn.Linear(d_model, 2)
+        )
+
+    def forward(self, token_ids: Tensor, attention_mask: Optional[Tensor] = None) -> Tensor:
+        x = super(ToxicityTransformer, self).forward(token_ids, attention_mask)
+
+        return self.classifier(x[:, 0])
