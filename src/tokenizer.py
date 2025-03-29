@@ -1,4 +1,4 @@
-from typing import Mapping, TypedDict, List, Optional
+from typing import Mapping, TypedDict, List
 
 import torch
 from torch.nn.utils.rnn import pad_sequence
@@ -19,15 +19,17 @@ alphabet = [
 ]
 
 class SMILESTokenizer:
-    pad_token: int = -100
-    bos_token: int = 0
-    mask_token: int = 1
+    pad_token: int = 0
+    bos_token: int = 1
+    mask_token: int = 2
 
     vocab: Mapping[str, int] = {
-        c: i + 2 for i, c in enumerate(alphabet)
+        c: i + 3 for i, c in enumerate(alphabet)
     }
 
-    vocab_size: int = 2 + len(alphabet)
+    vocab_size: int = 3 + len(alphabet)
+
+    max_length: int = 128
 
     def pad(self, token_ids: List[Tensor]) -> TokenizerOutput:
         return {
@@ -43,7 +45,7 @@ class SMILESTokenizer:
 
         return self.pad([
             torch.tensor(
-                [self.bos_token] + [self.vocab[c] for c in seq], dtype=torch.long
+                ([self.bos_token] + [self.vocab[c] for c in seq])[:self.max_length], dtype=torch.long
             )
             for seq in seqs
         ])
