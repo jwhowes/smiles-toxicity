@@ -33,9 +33,9 @@ class MaskedTrainer(BaseTrainer):
         return MaskedCriterion()
 
     def get_datasets(self) -> Tuple[MaskedPretrainDataset, MaskedPretrainDataset]:
-        assert os.path.exists(self.data_config.data_path), "Data path not found."
+        assert os.path.exists(os.path.join(os.environ["DATA_DIR"], self.data_config.data_path)), "Data path not found."
 
-        with open(self.data_config.data_path) as f:
+        with open(os.path.join(os.environ["DATA_DIR"], self.data_config.data_path)) as f:
             seqs = f.read().splitlines()
 
         split_idx = ceil(len(seqs) * self.data_config.train_frac)

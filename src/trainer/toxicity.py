@@ -31,9 +31,9 @@ class ToxicityTrainer(BaseTrainer):
     def get_datasets(self) -> Tuple[ToxicityDataset, ToxicityDataset]:
         return (
             ToxicityDataset(
-                os.path.join(self.data_config.data_dir, "NR-ER-train")
+                os.path.join(os.environ["DATA_DIR"], self.data_config.data_dir, "NR-ER-train")
             ),
             ToxicityDataset(
-                os.path.join(self.data_config.data_dir, "NR-ER-test")
+                os.path.join(os.environ["DATA_DIR"], self.data_config.data_dir, "NR-ER-test")
             )
         )

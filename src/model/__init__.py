@@ -45,7 +45,7 @@ class ModelConfig(Config):
             pretrained = PretrainedCheckpoint.model_validate(config["pretrained"])
 
             pretrained_config = ModelConfig.from_yaml(os.path.join(
-                "experiments", pretrained.experiment, "model.yaml"
+                os.environ["EXP_DIR"], pretrained.experiment, "model.yaml"
             ))
             pretrained_config.pretrained = pretrained
 
@@ -70,7 +70,7 @@ class SMILESModel(nn.Module, ABC):
             model.load_state_dict(
                 torch.load(
                     os.path.join(
-                        "experiments",
+                        os.environ["EXP_DIR"],
                         config.pretrained.experiment,
                         "ckpts",
                         f"checkpoint_{config.pretrained.ckpt_num:04}.pt"

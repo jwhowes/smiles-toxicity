@@ -36,7 +36,7 @@ class BaseTrainer(ABC):
     def __init__(self, config_dir: str):
         self.exp_name = os.path.basename(config_dir)
 
-        self.exp_dir = os.path.join("experiments", self.exp_name)
+        self.exp_dir = os.path.join(os.environ["EXP_DIR"], self.exp_name)
         self.ckpt_dir = os.path.join(self.exp_dir, "ckpts")
         self.train_log_path = os.path.join(self.exp_dir, "log-train.csv")
         self.eval_log_path = os.path.join(self.exp_dir, "log-eval.csv")

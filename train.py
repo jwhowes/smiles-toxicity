@@ -1,6 +1,7 @@
 from typing import Type
 
 import click
+from dotenv import load_dotenv
 
 from src.trainer import MaskedTrainer
 from src.trainer.base import BaseTrainer
@@ -11,6 +12,8 @@ from src.trainer.toxicity import ToxicityTrainer
 @click.argument("config-dir", type=click.Path(exists=True, file_okay=False))
 @click.pass_context
 def cli(ctx: click.Context, config_dir: str):
+    assert load_dotenv(".env"), ".env file not found."
+
     ctx.ensure_object(dict)
 
     ctx.obj["config_dir"] = config_dir
