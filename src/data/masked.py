@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import os
 from typing import Tuple, List
-from math import ceil
 
 import torch
+import numpy as np
 from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor
 from transformers import BatchEncoding
@@ -18,15 +17,19 @@ class MaskedPretrainDatasetConfig(DatasetConfig):
     data_path: str
 
     train_frac: float = 0.8
-    mask_p: float = 0.15
+    mask_p: float = 0.25
+    random_p: float = 0.15
 
 
 class MaskedPretrainDataset(BaseDataset):
-    def __init__(self, seqs: List[str], mask_p: float = 0.15):
+    def __init__(self, seqs: List[str], mask_p: float = 0.25, random_p: float = 0.0):
         self.tokenizer = SMILESTokenizer()
 
         self.mask_p = mask_p
+        self.random_p = random_p
         self.seqs = seqs
+
+        self.min_random = min(self.tokenizer.vocab.values())
 
     def __len__(self) -> int:
         return len(self.seqs)
@@ -38,8 +41,14 @@ class MaskedPretrainDataset(BaseDataset):
 
         L = unmasked_ids.shape[0]
         masked_ids = unmasked_ids.clone()
-        mask_idxs = torch.randperm(L - 1)[:ceil(L * self.mask_p)] + 1  # Don't mask bos token
-        masked_ids[mask_idxs] = self.tokenizer.mask_token
+
+        mask = torch.rand(L) < self.mask_p
+        mask[0] = False
+
+        masked_ids[mask] = self.tokenizer.mask_token
+        masked_ids[mask & (torch.rand(L) < self.random_p)] = np.random.randint(
+            low=self.min_random, high=self.tokenizer.vocab_size
+        )
 
         return unmasked_ids, masked_ids
 
