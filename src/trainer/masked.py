@@ -1,7 +1,12 @@
-from torch import nn, Tensor
+import os
+from math import ceil
+from typing import Tuple
 
-from ..model import MaskedTransformer
-from ..data import MaskedPretrainDataset
+from torch import nn, Tensor
+from torch.utils.data import DataLoader
+
+from ..model import ModelConfig, MaskedTransformer
+from ..data import MaskedPretrainDatasetConfig, MaskedPretrainDataset
 from ..tokenizer import SMILESTokenizer
 
 from .base import BaseTrainer
@@ -19,6 +24,29 @@ class MaskedCriterion(nn.Module):
 
 
 class MaskedTrainer(BaseTrainer):
-    model_cls = MaskedTransformer
-    criterion_cls = MaskedCriterion
-    dataset_cls = MaskedPretrainDataset
+    data_config_cls = MaskedPretrainDatasetConfig
+
+    def get_model(self) -> MaskedTransformer:
+        return MaskedTransformer.from_config(self.model_config)
+
+    def get_criterion(self) -> MaskedCriterion:
+        return MaskedCriterion()
+
+    def get_datasets(self) -> Tuple[MaskedPretrainDataset, MaskedPretrainDataset]:
+        assert os.path.exists(self.data_config.data_path), "Data path not found."
+
+        with open(self.data_config.data_path) as f:
+            seqs = f.read().splitlines()
+
+        split_idx = ceil(len(seqs) * self.data_config.train_frac)
+
+        return (
+            MaskedPretrainDataset(
+                seqs=seqs[:split_idx],
+                mask_p=self.data_config.mask_p
+            ),
+            MaskedPretrainDataset(
+                seqs=seqs[split_idx:],
+                mask_p=self.data_config.mask_p
+            )
+        )

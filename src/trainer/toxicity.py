@@ -1,6 +1,10 @@
-from torch import nn, Tensor
+import os
+from typing import Tuple
 
-from ..data import ToxicityDataset
+from torch import nn, Tensor
+from torch.utils.data import DataLoader
+
+from ..data import ToxicityDataset, ToxicityDatasetConfig
 from ..model import ToxicityTransformer
 
 from .base import BaseTrainer
@@ -16,6 +20,20 @@ class ToxicityCriterion(nn.Module):
 
 
 class ToxicityTrainer(BaseTrainer):
-    model_cls = ToxicityTransformer
-    criterion_cls = ToxicityCriterion
-    dataset_cls = ToxicityDataset
+    data_config_cls = ToxicityDatasetConfig
+
+    def get_model(self) -> ToxicityTransformer:
+        return ToxicityTransformer.from_config(self.model_config)
+
+    def get_criterion(self) -> ToxicityCriterion:
+        return ToxicityCriterion()
+
+    def get_datasets(self) -> Tuple[ToxicityDataset, ToxicityDataset]:
+        return (
+            ToxicityDataset(
+                os.path.join(self.data_config.data_dir, "NR-ER-train")
+            ),
+            ToxicityDataset(
+                os.path.join(self.data_config.data_dir, "NR-ER-test")
+            )
+        )

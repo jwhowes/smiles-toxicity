@@ -3,11 +3,11 @@ from __future__ import annotations
 import os
 from typing import Optional
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 
 import torch
 import yaml
 from torch import nn, Tensor
+from pydantic import BaseModel
 
 from ..tokenizer import SMILESTokenizer
 from ..config import Config
@@ -16,13 +16,11 @@ from .util import RMSNorm
 from .transformer import SMILESTransformer
 
 
-@dataclass
-class PretrainedCheckpoint:
+class PretrainedCheckpoint(BaseModel):
     experiment: str
     ckpt_num: int
 
 
-@dataclass
 class ModelConfig(Config):
     d_model: int = 768
     n_heads: int = 12
@@ -33,22 +31,9 @@ class ModelConfig(Config):
 
     pretrained: Optional[PretrainedCheckpoint] = None
 
-    def __init__(
-            self, pretrained: Optional[dict] = None,
-            **kwargs
-    ):
-        for k, v in kwargs.items():
-            setattr(self, k, v)
-
-        if pretrained is not None:
-            self.pretrained = PretrainedCheckpoint(**pretrained)
-
     @classmethod
     def from_yaml(cls, yaml_path: str) -> ModelConfig:
         assert os.path.exists(yaml_path), "yaml path not found."
-
-        yaml.add_multi_constructor('!', cls.unknown)
-        yaml.add_multi_constructor('tag:', cls.unknown)
 
         with open(yaml_path, "r") as f:
             config = yaml.load(f, Loader=yaml.FullLoader)
@@ -57,23 +42,21 @@ class ModelConfig(Config):
             return cls()
 
         if "pretrained" in config and config["pretrained"] is not None:
+            pretrained = PretrainedCheckpoint.model_validate(config["pretrained"])
+
             pretrained_config = ModelConfig.from_yaml(os.path.join(
-                "experiments", config["pretrained"]["experiment"], "model.yaml"
+                "experiments", pretrained.experiment, "model.yaml"
             ))
-            pretrained_config.pretrained = config["pretrained"]
+            pretrained_config.pretrained = pretrained
 
-            return cls(**pretrained_config.__dict__)
+            return pretrained_config
 
-        return cls(
-            **{
-                k: float(v) if cls.__dataclass_fields__[k].type == "float" else v for k, v in config.items()
-            }
-        )
+        return cls.model_validate(config)
 
 
-class BaseModel(nn.Module, ABC):
+class SMILESModel(nn.Module, ABC):
     @classmethod
-    def from_config(cls, config: ModelConfig, load_pretrained: bool = True) -> MaskedTransformer:
+    def from_config(cls, config: ModelConfig, load_pretrained: bool = True) -> SMILESModel:
         model = cls(
             max_length=SMILESTokenizer.max_length,
             d_model=config.d_model,
@@ -83,7 +66,7 @@ class BaseModel(nn.Module, ABC):
             ffn_dropout=config.ffn_dropout
         )
 
-        if load_pretrained:
+        if config.pretrained is not None and load_pretrained:
             model.load_state_dict(
                 torch.load(
                     os.path.join(
@@ -105,7 +88,7 @@ class BaseModel(nn.Module, ABC):
         ...
 
 
-class MaskedTransformer(SMILESTransformer, BaseModel):
+class MaskedTransformer(SMILESTransformer, SMILESModel):
     def __init__(
             self, d_model: int, n_heads: int, n_layers: int, max_length: int,
             attn_dropout: float = 0.0, ffn_dropout: float = 0.0
@@ -125,7 +108,7 @@ class MaskedTransformer(SMILESTransformer, BaseModel):
         return self.head(x)
 
 
-class ToxicityTransformer(SMILESTransformer, BaseModel):
+class ToxicityTransformer(SMILESTransformer, SMILESModel):
     def __init__(
             self, d_model: int, n_heads: int, n_layers: int, max_length: int,
             attn_dropout: float = 0.0, ffn_dropout: float = 0.0

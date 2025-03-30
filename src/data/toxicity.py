@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 from typing import Tuple, List
-from dataclasses import dataclass
 
 import torch
 from transformers import BatchEncoding
@@ -12,7 +11,6 @@ from ..tokenizer import SMILESTokenizer
 from .base import BaseDataset, DatasetConfig
 
 
-@dataclass(kw_only=True)
 class ToxicityDatasetConfig(DatasetConfig):
     data_dir: str
 
@@ -45,15 +43,4 @@ class ToxicityDataset(BaseDataset):
             BatchEncoding({
                 "label": torch.tensor(labels, dtype=torch.long)
             })
-        )
-
-    @classmethod
-    def from_config(cls, config: ToxicityDatasetConfig) -> Tuple[ToxicityDataset, ToxicityDataset]:
-        return (
-            ToxicityDataset(
-                os.path.join(config.data_dir, "NR-ER-train")
-            ),
-            ToxicityDataset(
-                os.path.join(config.data_dir, "NR-ER-test")
-            )
         )
