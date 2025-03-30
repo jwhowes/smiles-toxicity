@@ -3,9 +3,8 @@ from math import ceil
 from typing import Tuple
 
 from torch import nn, Tensor
-from torch.utils.data import DataLoader
 
-from ..model import ModelConfig, MaskedTransformer
+from ..model import MaskedTransformer
 from ..data import MaskedPretrainDatasetConfig, MaskedPretrainDataset
 from ..tokenizer import SMILESTokenizer
 

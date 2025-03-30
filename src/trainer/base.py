@@ -4,7 +4,6 @@ from typing import Type, Callable, Tuple
 from datetime import datetime
 
 import torch
-import yaml
 from torch import Tensor
 from accelerate import Accelerator
 from torch.utils.data import DataLoader
